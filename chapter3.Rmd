@@ -276,4 +276,5 @@ Model looks bad, we got 39 boys following girls in our data but that seems very 
 
 ```{r}
 plot(table(w_first_born_girls))
+abline(v = no_boys_following_girl, col = "red")
 ```
