@@ -47,7 +47,7 @@ $$
 $$
 Line 2 is the linear model.
 
-5. There are 3 + `i` parameters? $$\alpha$$, $$\beta$$, $$\sigma$$ and each $$\mu_{i}$$? Or is $$\mu$$ count as one?
+5. There are 3 parameters? $$\alpha$$, $$\beta$$ and $$\sigma$$
 
 ## Medium
 
@@ -137,6 +137,7 @@ Going for exponential beta as I expect that height in students will increase yea
 ```{r}
 curve(dexp(x, rate = 0.25), from = 0, to = 10)
 ```
+
 5. Doesn't change as I tried to factor that into part 4
 
 6. We have alpha is normally disributed with $$\sigma^{2} = 20$$, if within a single age never vary by more than 64cm, we can use this to change $$\alpha$$. In normal, 95% of the data is within 2sds of the mean. So we could put 95% bounds at 64cm. So `(a + 2sd) - (a - 2sd) = 64` => `sd = 16`
@@ -159,29 +160,26 @@ data(Howell1)
 
 d <- Howell1
 d2 <- d[d$age >= 18, ]
-
 ```
 
 
 ```{r}
 plot(NULL, 
-     xlim=range(d2$weight), 
-     ylim=c(-100, 400),
-     xlab="weight", 
-     ylab="height")
+     xlim = range(d2$weight), 
+     ylim = c(-100, 400),
+     xlab = "weight", 
+     ylab = "height")
 
-abline( h=0 , lty=2 )
+abline(h = 0, lty = 2)
 
-abline( h=272 , lty=1 , lwd=0.5 )
+abline(h = 272, lty = 1, lwd = 0.5)
 
-mtext( "b ~ dnorm(0,10)" )
-
-xbar <- mean(d2$weight)
+mtext("b ~ dnorm(0,10)")
 
 N <- 100
 a <- rnorm(N, 178, 20)
 b <- runif(N, 0, 1)
-print(b)
+
 for (i in 1:N) {
   curve(a[i] + b[i]*(x),
         from = min(d2$weight), 
@@ -191,14 +189,106 @@ for (i in 1:N) {
 }
 ```
 ```{r}
-# fit <- quap(
-#   alist(
-#     height ~ dnorm(mu, sigma),
-#     mu <- a + b * weight,
-#     a ~ dnorm(178, 20),
-#     b ~ dunif(0, 1),
-#     sigma ~ dunif(0, 5)
-#   ),
-#   data = d2
-# )
+fit <- quap(
+  alist(
+    height ~ dnorm(mu, sigma),
+    mu <- a + b * weight,
+    a ~ dnorm(130, 10),
+    b ~ dunif(0, 2),
+    sigma ~ dunif(0, 50)
+  ),
+  data = d2
+)
+```
+
+```{r}
+xbar <- mean(d2$weight)
+m4.3 <- quap(
+  alist(
+    height ~ dnorm( mu , sigma ) ,
+    mu <- a + b*( weight - xbar ) ,
+    a ~ dnorm( 178 , 20 ) ,
+    b ~ dlnorm( 0 , 1 ) ,
+    sigma ~ dunif( 0 , 50 )
+    ),
+  data = d2)
+```
+
+Compare new models posterior to that of the original model
+
+```{r}
+precis(fit)
+```
+
+```{r}
+precis(m4.3)
+```
+The mean of a much lower in the model without average weight. That makes sense as before when x = 0, y was the average eight but now it is the height of a weight 0 person which is kind of meaningless. The standard deviation of this is much higher too. I feel like that makes intuitive sense as the value there is outside the range of the data so we are going to be more uncertain about its value.
+
+Look at covariance among the parameters
+
+```{r}
+round(vcov(fit), 3)
+```
+
+```{r}
+round(vcov(m4.3), 3)
+```
+
+```{r}
+cov2cor(vcov(fit))
+```
+
+In the fit without the mean weight there is higher covariance between a and b. Which we can see on the graph below.
+
+```{r}
+pairs(fit)
+```
+
+```{r}
+pairs(m4.3)
+```
+
+What do we read from this...
+
+Compare the posterior predictions of both models
+
+```{r}
+plot( height ~ weight , data=d2 , col=rangi2 )
+post <- extract.samples( fit )
+a_map <- mean(post$a)
+b_map <- mean(post$b)
+curve( a_map + b_map*(x) , add=TRUE )
+```
+
+```{r}
+par(mfrow=c(1,2))
+weight.seq <- seq( from=25 , to=70 , by=1 )
+mu <- link(fit , data=data.frame(weight=weight.seq) )
+plot( height ~ weight , d2 , type="n" )
+for ( i in 1:100 ) {
+  points( weight.seq , mu[i,] , pch=16 , col=col.alpha(rangi2,0.1) )
+}
+mu.mean <- apply( mu , 2 , mean )
+mu.PI <- apply( mu , 2 , PI , prob=0.89 )
+
+mu4.3 <- link(m4.3 , data=data.frame(weight=weight.seq) )
+plot( height ~ weight , d2 , type="n" )
+for ( i in 1:100 ) {
+  points( weight.seq , mu4.3[i,] , pch=16 , col=col.alpha(rangi2,0.1) )
+}
+mu4.3.mean <- apply( mu4.3 , 2 , mean )
+mu4.3.PI <- apply( mu4.3 , 2 , PI , prob=0.89 )
+```
+
+
+```{r}
+par(mfrow=c(1,2))
+plot( height ~ weight , data=d2 , col=col.alpha(rangi2,0.5) )
+lines( weight.seq , mu.mean )
+shade( mu.PI , weight.seq )
+
+plot( height ~ weight , data=d2 , col=col.alpha(rangi2,0.5) )
+lines( weight.seq , mu4.3.mean )
+shade( mu4.3.PI , weight.seq )
 ```
