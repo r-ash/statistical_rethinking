@@ -25,7 +25,7 @@ $$
 3. Write down the appropriate form of Bayes' theorem that includes the proper likelihood and priors
 
 $$
-Pr(\mu,\sigma | y) = \frac{\prod{Normal(y_{i}|\mu,\sigma)Normal(\mu|0,10)Exponential(\sigma|1)}}{\int{\int{Normal(y_{i}|\mu,\sigma)Normal(\mu|0,10)Exponential(\sigma|1)}}d\mu d\sigma}
+Pr(\mu,\sigma | y) = \frac{\prod_{i}{Normal(y_{i}|\mu,\sigma)Normal(\mu|0,10)Exponential(\sigma|1)}}{\int{\int{\prod_{i}{Normal(y_{i}|\mu,\sigma)Normal(\mu|0,10)Exponential(\sigma|1)}}d\mu d\sigma}}
 $$
 
 4. 
@@ -82,8 +82,8 @@ dens(prior_y)
 
 ```{r}
 flist <- alist(
-  y ~ dnorm(mu, sigma)
-  mu ~ dnorm(0, 10)
+  y ~ dnorm(mu, sigma),
+  mu ~ dnorm(0, 10),
   sigma ~ dexp(1)
 )
 ```
@@ -125,6 +125,80 @@ $$
 \mu = \alpha + \beta y
 $$
 $$
-\alpha \sim 
+\alpha \sim Normal(178, 20)
 $$
+$$
+\beta \sim Exponential(0.25)
+$$
+$$
+\sigma \sim Uniform(0, 50)
+$$
+Going for exponential beta as I expect that height in students will increase year on year, so want to ignore <0. I think ideal world could have a prior that wouldn't have it's mode at 0 as they are more likely to grow but thought this would be close enough. Use rate 0.25 as made the curve look "not too flat"
+```{r}
+curve(dexp(x, rate = 0.25), from = 0, to = 10)
+```
+5. Doesn't change as I tried to factor that into part 4
 
+6. We have alpha is normally disributed with $$\sigma^{2} = 20$$, if within a single age never vary by more than 64cm, we can use this to change $$\alpha$$. In normal, 95% of the data is within 2sds of the mean. So we could put 95% bounds at 64cm. So `(a + 2sd) - (a - 2sd) = 64` => `sd = 16`
+
+```{r}
+curve(dnorm(x, mean = 178, sd = 16), from = 130, to = 230)
+```
+Or would we revise to 64cm to cover 99.7% by using 3 sds from the mean? Would give tighter prior
+
+```{r}
+curve(dnorm(x, mean = 178, sd = 16), from = 130, to = 230)
+```
+
+7. Refit model m4.3, but omit the mean weight `xbar`. Compare the new posterior to the original model, look at covariance among parameters. Compare posterior predictions
+
+```{r}
+library(rethinking)
+
+data(Howell1)
+
+d <- Howell1
+d2 <- d[d$age >= 18, ]
+
+```
+
+
+```{r}
+plot(NULL, 
+     xlim=range(d2$weight), 
+     ylim=c(-100, 400),
+     xlab="weight", 
+     ylab="height")
+
+abline( h=0 , lty=2 )
+
+abline( h=272 , lty=1 , lwd=0.5 )
+
+mtext( "b ~ dnorm(0,10)" )
+
+xbar <- mean(d2$weight)
+
+N <- 100
+a <- rnorm(N, 178, 20)
+b <- runif(N, 0, 1)
+print(b)
+for (i in 1:N) {
+  curve(a[i] + b[i]*(x),
+        from = min(d2$weight), 
+        to = max(d2$weight), 
+        add = TRUE,
+        col = col.alpha("black", 0.2))
+}
+```
+```{r}
+# fit <- quap(
+#   alist(
+#     height ~ dnorm(mu, sigma),
+#     mu <- a + b * weight,
+#     a ~ dnorm(178, 20),
+#     b ~ dunif(0, 1),
+#     sigma ~ dunif(0, 5)
+#   ),
+#   data = d2
+# )
+```
