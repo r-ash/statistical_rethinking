@@ -254,41 +254,187 @@ What do we read from this...
 Compare the posterior predictions of both models
 
 ```{r}
-plot( height ~ weight , data=d2 , col=rangi2 )
+plot( height ~ weight , data = d2 , col = rangi2 )
 post <- extract.samples( fit )
 a_map <- mean(post$a)
 b_map <- mean(post$b)
-curve( a_map + b_map*(x) , add=TRUE )
+curve( a_map + b_map*(x) , add = TRUE )
 ```
 
 ```{r}
-par(mfrow=c(1,2))
-weight.seq <- seq( from=25 , to=70 , by=1 )
-mu <- link(fit , data=data.frame(weight=weight.seq) )
-plot( height ~ weight , d2 , type="n" )
-for ( i in 1:100 ) {
-  points( weight.seq , mu[i,] , pch=16 , col=col.alpha(rangi2,0.1) )
+par(mfrow = c(1,2))
+weight.seq <- seq( from = 25 , to = 70 , by = 1 )
+mu <- link(fit , data = data.frame(weight = weight.seq) )
+plot( height ~ weight , d2 , type = "n" )
+for (i in 1:100) {
+  points( weight.seq , mu[i,] , pch = 16 , col = col.alpha(rangi2,0.1) )
 }
 mu.mean <- apply( mu , 2 , mean )
-mu.PI <- apply( mu , 2 , PI , prob=0.89 )
+mu.PI <- apply( mu , 2 , PI , prob = 0.89 )
 
-mu4.3 <- link(m4.3 , data=data.frame(weight=weight.seq) )
-plot( height ~ weight , d2 , type="n" )
-for ( i in 1:100 ) {
-  points( weight.seq , mu4.3[i,] , pch=16 , col=col.alpha(rangi2,0.1) )
+mu4.3 <- link(m4.3 , data = data.frame(weight = weight.seq) )
+plot( height ~ weight , d2 , type = "n" )
+for (i in 1:100) {
+  points( weight.seq , mu4.3[i,] , pch = 16 , col = col.alpha(rangi2,0.1) )
 }
 mu4.3.mean <- apply( mu4.3 , 2 , mean )
-mu4.3.PI <- apply( mu4.3 , 2 , PI , prob=0.89 )
+mu4.3.PI <- apply( mu4.3 , 2 , PI , prob = 0.89 )
 ```
 
 
 ```{r}
-par(mfrow=c(1,2))
-plot( height ~ weight , data=d2 , col=col.alpha(rangi2,0.5) )
+par(mfrow = c(1,2))
+plot( height ~ weight , data = d2 , col = col.alpha(rangi2,0.5) )
 lines( weight.seq , mu.mean )
 shade( mu.PI , weight.seq )
 
-plot( height ~ weight , data=d2 , col=col.alpha(rangi2,0.5) )
+plot( height ~ weight , data = d2 , col = col.alpha(rangi2,0.5) )
 lines( weight.seq , mu4.3.mean )
 shade( mu4.3.PI , weight.seq )
+```
+
+## Hard questions
+
+1. Weights listed below were recorded in the !Kung census, but heights were not recorded for these individuals. Provide predicted heights and 89% intervals for each of these individuals. Fill in the table below, using model-based predictions.
+
+```{r}
+weights <- c(46.95, 43.72, 64.78, 32.59, 54.63)
+```
+
+```{r}
+library(rethinking)
+data(Howell1)
+d <- Howell1
+d2 <- d[ d$age >= 18 , ]
+
+xbar <- mean(d2$weight)
+m4.3 <- quap(
+  alist(
+    height ~ dnorm( mu , sigma ),
+    mu <- a + b*( weight - xbar ),
+    a ~ dnorm( 178 , 20 ),
+    b ~ dlnorm( 0 , 1 ) ,
+    sigma ~ dunif( 0 , 50 )
+), data = d2)
+```
+
+```{r}
+mu <- link(m4.3, data = data.frame(weight = weights))
+mu.mean <- apply(mu, 2, mean)
+mu.PI <- apply(mu, 2, PI, prob = 0.89)
+out <- data.frame(weight = weights, 
+                  "expected height" = mu.mean, 
+                  t(mu.PI))
+```
+
+2. Select all the rows in `Howell1` data with ages below 18 years of age.
+
+```{r}
+u18 <- d[ d$age < 18 , ]
+```
+
+a. Fit a linear regression using `quap`. Present and interpret the estimates. For every 10 units of increase in weight, how much taller does the model predict a child gets?
+
+```{r}
+xbar <- mean(u18$weight)
+mu18 <- quap(
+  alist(
+    height ~ dnorm( mu , sigma ),
+    mu <- a + b*( weight - xbar ),
+    a ~ dnorm( 100 , 40 ),
+    b ~ dlnorm( 0 , 1 ) ,
+    sigma ~ dunif( 0 , 50 )
+), data = u18)
+```
+
+```{r}
+plot(height ~ weight, data = u18, col = rangi2)
+post <- extract.samples(mu18)
+a_map <- mean(post$a)
+b_map <- mean(post$b)
+curve(a_map + b_map * (x - xbar), add = TRUE)
+```
+
+```{r}
+precis(mu18)
+```
+
+For every 10 unit increase in weight, there is a `10 * b_map` increase in height
+
+```{r}
+10 * b_map
+```
+
+b. Plot raw data, height on vertical and weight on horizontal. Superimpose the map regression line and 89% interval for the mean. Also superimpose the 89% interval for predicted heights.
+
+```{r}
+post <- extract.samples(mu18)
+a_map <- mean(post$a)
+b_map <- mean(post$b)
+model_func <- function(x) {
+  a_map + b_map * (x - xbar)
+}
+mu <- link(mu18)
+mu.mean <- apply(mu, 2, mean)
+mu.PI <- apply(mu, 2, PI, prob = 0.89)
+
+sim_heights <- sim(mu18)
+height_pi <- apply(sim_heights, 2, PI, prob = 0.89)
+
+ggplot2::ggplot(u18, ggplot2::aes(weight, height)) +
+  ggplot2::geom_ribbon(ggplot2::aes(ymin = mu.PI[1, ], ymax = mu.PI[2, ]), 
+                       fill = "grey50", alpha = 0.5) +
+  ggplot2::geom_ribbon(ggplot2::aes(ymin = height_pi[1, ], ymax = height_pi[2, ]),
+                       fill = "grey80", alpha = 0.5) + 
+  ggplot2::geom_point(shape = 21, colour = "blue") +
+  ggplot2::geom_function(fun = model_func) + 
+  ggplot2::theme_bw()
+
+## How does extract.samples relate to link?
+## I don't really trust this uncertainty here.. Looks really narrow compared to the real data, why is that?
+
+# plot(height ~ weight, data = u18, col = rangi2)
+# curve(a_map + b_map * (x - xbar), add = TRUE)
+```
+
+c. What about the model fit concerns you? Describe the kind of assumptions you would change, if any to improve the model .
+
+Can clearly see the data has curve and fitting a straight line through it seems to have some issues. The model is doing a bad job at both tail ends. I would incorporate another term into this to capture the curvature... though what that looks like? Some x^2 term?
+
+3. Attempt to model age ages, but modelling logarithm of body weight as scaling with height.
+
+```{r}
+full_model <- quap(
+  alist(
+    height ~ dnorm( mu , sigma ),
+    mu <- a + b * log(weight),
+    a ~ dnorm( 120 , 60 ),
+    b ~ dlnorm( 0 , 1 ) ,
+    sigma ~ dunif( 0 , 50 )
+), data = d)
+```
+
+```{r}
+post <- extract.samples(full_model)
+a_map <- mean(post$a)
+b_map <- mean(post$b)
+model_func <- function(x) {
+  a_map + b_map * log(x)
+}
+
+mu <- link(full_model)
+mu.mean <- apply(mu, 2, mean)
+mu.HPDI <- apply(mu, 2, HPDI, prob = 0.97)
+
+sim_heights <- sim(full_model)
+height_pi <- apply(sim_heights, 2, PI, prob = 0.89)
+
+ggplot2::ggplot(d, ggplot2::aes(weight, height)) +
+  ggplot2::geom_ribbon(ggplot2::aes(ymin = mu.HPDI[1, ], ymax = mu.HPDI[2, ]), 
+                       fill = "grey50", alpha = 0.5) +
+  ggplot2::geom_ribbon(ggplot2::aes(ymin = height_pi[1, ], ymax = height_pi[2, ]),
+                       fill = "grey80", alpha = 0.5) + 
+  ggplot2::geom_point(shape = 21, colour = "blue") +
+  ggplot2::geom_function(fun = model_func) + 
+  ggplot2::theme_bw()
 ```
